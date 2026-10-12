@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Fetch tessdata models
+        shell: bash
+        run: bash scripts/fetch_tessdata.sh
+
+      - name: Publish
+        run: >-
+          dotnet publish OcrTool.App/OcrTool.App.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=false -p:PublishTrimmed=false
+          -o publish
+
+      - name: Smoke test
+        run: ./publish/OcrTool.App.exe --autostart status
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $name = "OcrTool-${{ github.ref_name }}-win-x64.zip"
+          Compress-Archive -Path publish\* -DestinationPath $name -Force
+          Write-Output "Created $name"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "${{ github.ref_name }}"
+          "OcrTool-${{ github.ref_name }}-win-x64.zip"
+          --title "${{ github.ref_name }}"
+          --generate-notes

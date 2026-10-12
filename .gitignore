@@ -1,0 +1,35 @@
+# Build output
+bin/
+obj/
+publish/
+dist/
+release/
+.stage*/
+*.user
+*.suo
+
+# Local .NET SDK and archives
+dotnet/
+dotnet-sdk-*.tar.gz
+
+# Models are downloaded by scripts/fetch_tessdata.sh (not committed)
+*.traineddata
+
+# Local dev tooling and scratch assets
+build_test_release.sh
+sync_test_release_safe.sh
+test_images/
+test_results/
+cli_results/
+crops/
+native_libs/
+native_linux/
+native_tesseract_550/
+CheckApi/
+OcrTool.Tests/
+MVP_SUMMARY.md
+check_api.cs
+generate_test_images.py
+
+# Logs
+*.log
