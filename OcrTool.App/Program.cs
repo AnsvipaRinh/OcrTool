@@ -226,14 +226,14 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         if (!_hotkey.IsRegistered)
         {
-            Logger.Log("WARNING: Low-level keyboard hook failed to install");
+            Logger.Log("WARNING: RegisterHotKey failed");
             _trayIcon.BalloonTipTitle = "OCR Tool - Hotkey Unavailable";
-            _trayIcon.BalloonTipText = "Hotkey hook failed to install.\nTry restarting the application.";
+            _trayIcon.BalloonTipText = "Hotkey registration failed.\nTry restarting the application.";
             _trayIcon.ShowBalloonTip(5000);
         }
         else
         {
-            Logger.Log("Hotkey hook installed successfully");
+            Logger.Log("Hotkey registered successfully");
         }
     }
 
@@ -531,7 +531,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _trayIcon.Text = "OCR Tool - Press " + _config.Hotkey;
             UpdateHotkeyMenuItem();
             SaveConfig();
-            Logger.Log($"New hotkey hook installed for: {_config.Hotkey}");
+            Logger.Log($"New hotkey registered for: {_config.Hotkey}");
         }
     }
 

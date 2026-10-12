@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.1
+
+### Background power
+- The global hotkey now uses `RegisterHotKey` instead of a low-level
+  keyboard hook (`WH_KEYBOARD_LL`): the process is woken only for the exact
+  hotkey combination instead of for every keystroke made system-wide.
+  Idle CPU in the tray remains 0.
+- Removed a duplicated `GCHandle.Alloc` in the hotkey constructor.
+
 ## 1.0.0
 
 First public release.

@@ -7,12 +7,12 @@ namespace OcrTool.App;
 
 internal sealed class GlobalHotkey : IDisposable
 {
+    private readonly string _hotkeyString;
+    private readonly HotkeyWindow _window;
     private readonly int _id;
     private bool _registered;
-    private IntPtr _hookHandle;
-    private readonly LowLevelKeyboardProc _proc;
-    private readonly string _hotkeyString;
-    private GCHandle _procHandle;
+    private bool _disposed;
+    private static int s_nextId = 0x4700;
 
     public event EventHandler? HotkeyPressed;
     public bool IsRegistered => _registered;
@@ -22,78 +22,26 @@ internal sealed class GlobalHotkey : IDisposable
     public GlobalHotkey(string hotkeyString)
     {
         _hotkeyString = hotkeyString;
-        _id = GetHashCode() & 0xFFFF;
-        _proc = HookCallback;
-        _procHandle = GCHandle.Alloc(_proc);
-        InstallHook();
-    }
+        _id = ++s_nextId;
+        _window = new HotkeyWindow(() => HotkeyPressed?.Invoke(this, EventArgs.Empty));
 
-    private void InstallHook()
-    {
-        _procHandle = GCHandle.Alloc(_proc);
-        _hookHandle = SetHook(_proc);
-        if (_hookHandle == IntPtr.Zero)
+        if (!ParseHotkey(hotkeyString, out var modifiers, out var key))
         {
-            int error = Marshal.GetLastWin32Error();
-            LastError = error;
-            _registered = false;
-            Logger.Log($"SetWindowsHookEx FAILED: error=0x{error:X} ({error})");
+            LastError = 87;
+            Logger.Log($"RegisterHotKey: invalid hotkey string '{hotkeyString}'");
+            return;
+        }
+
+        _registered = RegisterHotKey(_window.Handle, _id, modifiers, (uint)(int)key);
+        if (_registered)
+        {
+            Logger.Log($"RegisterHotKey SUCCESS: {hotkeyString} id=0x{_id:X}");
         }
         else
         {
-            _registered = true;
-            Logger.Log($"SetWindowsHookEx SUCCESS: handle=0x{_hookHandle.ToInt64():X}, registered={_registered}");
+            LastError = Marshal.GetLastWin32Error();
+            Logger.Log($"RegisterHotKey FAILED: {hotkeyString}, error={LastError}");
         }
-    }
-
-    public void Reinstall()
-    {
-        Dispose();
-        var handle = GCHandle.Alloc(_proc);
-        _procHandle = handle;
-        _hookHandle = SetHook(_proc);
-        _registered = _hookHandle != IntPtr.Zero;
-        Logger.Log($"SetWindowsHookEx reinstalled: handle=0x{_hookHandle.ToInt64():X}, registered={_registered}");
-    }
-
-    private IntPtr SetHook(LowLevelKeyboardProc proc)
-    {
-        using var curProcess = System.Diagnostics.Process.GetCurrentProcess();
-        using var curModule = curProcess.MainModule;
-        var hMod = GetModuleHandle(curModule.ModuleName);
-        Logger.Log($"GetModuleHandle({curModule.ModuleName})=0x{hMod.ToInt64():X}");
-        return SetWindowsHookEx(WH_KEYBOARD_LL, proc, hMod, 0);
-    }
-
-    private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
-    {
-        if (nCode >= 0 && (wParam == (IntPtr)WM_KEYDOWN || wParam == (IntPtr)WM_SYSKEYDOWN))
-        {
-            int vkCode = Marshal.ReadInt32(lParam);
-            if (IsHotkeyMatch(vkCode))
-            {
-                Logger.Log($"Hotkey matched: vk=0x{vkCode:X}");
-                HotkeyPressed?.Invoke(this, EventArgs.Empty);
-                return (IntPtr)1;
-            }
-        }
-        return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
-    }
-
-    private bool IsHotkeyMatch(int vkCode)
-    {
-        if (!ParseHotkey(_hotkeyString, out var modifiers, out var key))
-            return false;
-
-        bool ctrlPressed = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-        bool shiftPressed = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
-        bool altPressed = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
-
-        if (((modifiers & MOD_CONTROL) != 0) != ctrlPressed) return false;
-        if (((modifiers & MOD_SHIFT) != 0) != shiftPressed) return false;
-        if (((modifiers & MOD_ALT) != 0) != altPressed) return false;
-
-        return vkCode == (int)key;
     }
 
     private static bool ParseHotkey(string hotkeyString, out uint modifiers, out Keys key)
@@ -134,43 +82,55 @@ internal sealed class GlobalHotkey : IDisposable
 
     public void Dispose()
     {
-        if (_hookHandle != IntPtr.Zero)
+        if (_disposed) return;
+        _disposed = true;
+        if (_registered)
         {
-            UnhookWindowsHookEx(_hookHandle);
+            UnregisterHotKey(_window.Handle, _id);
             _registered = false;
         }
-        if (_procHandle.IsAllocated)
+        if (_window.Handle != IntPtr.Zero)
         {
-            _procHandle.Free();
+            _window.DestroyHandle();
         }
     }
 
-    private const int WH_KEYBOARD_LL = 13;
-    private const int WM_KEYDOWN = 0x0100;
-    private const int WM_SYSKEYDOWN = 0x0104;
+    private sealed class HotkeyWindow : NativeWindow
+    {
+        private readonly Action _callback;
+
+        public HotkeyWindow(Action callback)
+        {
+            _callback = callback;
+            var cp = new CreateParams
+            {
+                Caption = "OcrToolHotkey",
+                ClassName = "STATIC",
+                Parent = new IntPtr(-3)
+            };
+            CreateHandle(cp);
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_HOTKEY)
+            {
+                _callback();
+            }
+            base.WndProc(ref m);
+        }
+    }
+
+    private const int WM_HOTKEY = 0x0312;
     private const uint MOD_ALT = 0x0001;
     private const uint MOD_CONTROL = 0x0002;
     private const uint MOD_SHIFT = 0x0004;
     private const uint MOD_WIN = 0x0008;
-    private const int VK_CONTROL = 0x11;
-    private const int VK_SHIFT = 0x10;
-    private const int VK_MENU = 0x12;
-
-    private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll", SetLastError = true)]
-    private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
+    private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool UnhookWindowsHookEx(IntPtr hhk);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr GetModuleHandle(string lpModuleName);
-
-    [DllImport("user32.dll")]
-    private static extern short GetAsyncKeyState(int vKey);
+    private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 }
