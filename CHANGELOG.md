@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.2
+
+### Crash fix
+- Fixed a crash that terminated the process after a completed hotkey scan:
+  an unhandled exception on the UI thread escaped the scan handler, and the
+  WinForms `ThreadExceptionDialog` itself failed to open (Win32 error 1410),
+  taking the process down.
+- Unhandled UI-thread and AppDomain exceptions are now logged to
+  `%LOCALAPPDATA%\OcrTool\OcrTool.log` (`UNHANDLED_UI` / `UNHANDLED_DOMAIN`)
+  instead of showing a dialog, so the tray app survives and the real exception
+  is captured.
+- Defensive try/catch around clipboard/toast calls, bitmap disposal in
+  `finally` blocks, overlay creation, and the hotkey window procedure.
+
 ## 1.0.1
 
 ### Background power

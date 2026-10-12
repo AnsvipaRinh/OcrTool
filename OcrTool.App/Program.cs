@@ -32,8 +32,12 @@ internal static class Program
         }
 
         Logger.Log("Application startup");
-        
+
         ApplicationConfiguration.Initialize();
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+        Application.ThreadException += (s, e) => Logger.Log("UNHANDLED_UI: " + e.Exception);
+        AppDomain.CurrentDomain.UnhandledException += (s, e) => Logger.Log("UNHANDLED_DOMAIN: " + e.ExceptionObject);
+
         Application.Run(new TrayApplicationContext());
         
         Logger.Log("Application exit");
@@ -397,13 +401,22 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         if (_overlay != null) return;
 
-        var snapshot = CaptureVirtualScreen();
-        _overlay = new SelectionOverlay(snapshot);
-        _overlay.SelectionCompleted += OnSelectionCompleted;
-        _overlay.SelectionCancelled += OnSelectionCancelled;
-        Logger.Log($"Creating overlay, bounds: {SystemInformation.VirtualScreen}, snapshot: {snapshot?.Width}x{snapshot?.Height}");
-        _overlay.Show();
-        Logger.Log("Overlay shown");
+        try
+        {
+            var snapshot = CaptureVirtualScreen();
+            _overlay = new SelectionOverlay(snapshot);
+            _overlay.SelectionCompleted += OnSelectionCompleted;
+            _overlay.SelectionCancelled += OnSelectionCancelled;
+            Logger.Log($"Creating overlay, bounds: {SystemInformation.VirtualScreen}, snapshot: {snapshot?.Width}x{snapshot?.Height}");
+            _overlay.Show();
+            Logger.Log("Overlay shown");
+        }
+        catch (Exception ex)
+        {
+            Logger.Log("StartCapture failed: " + ex);
+            _overlay?.Dispose();
+            _overlay = null;
+        }
     }
 
     private static Bitmap? CaptureVirtualScreen()
@@ -487,8 +500,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
         finally
         {
-            bitmap?.Dispose();
-            snapshot?.Dispose();
+            try { bitmap?.Dispose(); } catch (Exception ex) { Logger.Log("Dispose bitmap failed: " + ex.Message); }
+            try { snapshot?.Dispose(); } catch (Exception ex) { Logger.Log("Dispose snapshot failed: " + ex.Message); }
         }
     }
 
@@ -498,7 +511,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         var snapshot = _overlay?.Snapshot;
         _overlay?.Dispose();
         _overlay = null;
-        snapshot?.Dispose();
+        try { snapshot?.Dispose(); } catch (Exception ex) { Logger.Log("Dispose snapshot failed: " + ex.Message); }
     }
 
     private Bitmap? CaptureSelection(Rectangle selection)
@@ -565,8 +578,15 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void ShowToast(string title, string message)
     {
-        var toast = new ToastForm(title, message);
-        toast.Show();
+        try
+        {
+            var toast = new ToastForm(title, message);
+            toast.Show();
+        }
+        catch (Exception ex)
+        {
+            Logger.Log("ShowToast failed: " + ex.Message);
+        }
     }
 
     private void Exit()

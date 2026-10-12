@@ -113,11 +113,18 @@ internal sealed class GlobalHotkey : IDisposable
 
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == WM_HOTKEY)
+            try
             {
-                _callback();
+                if (m.Msg == WM_HOTKEY)
+                {
+                    _callback();
+                }
+                base.WndProc(ref m);
             }
-            base.WndProc(ref m);
+            catch (Exception ex)
+            {
+                Logger.Log("Hotkey WndProc failed: " + ex);
+            }
         }
     }
 
