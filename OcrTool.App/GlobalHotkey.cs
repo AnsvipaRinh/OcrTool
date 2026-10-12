@@ -105,7 +105,6 @@ internal sealed class GlobalHotkey : IDisposable
             var cp = new CreateParams
             {
                 Caption = "OcrToolHotkey",
-                ClassName = "STATIC",
                 Parent = new IntPtr(-3)
             };
             CreateHandle(cp);

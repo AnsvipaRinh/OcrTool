@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.3
+
+### Hotkey window class fix
+- Fixed `Win32Exception (1410)` ("class already registered") that crashed every
+  new WinForms window in the app: the tray hotkey menu dialog and the
+  result toast could not open, and the process died after a completed scan.
+  The message-only hotkey window no longer pins `ClassName = "STATIC"`
+  (a system class); WinForms now generates a unique class name.
+- Restored `tessdata_best` model files (eng/rus/osd) to the published
+  output; the engine failed to initialise without them.
+- `RegisterHotKey` low-power behaviour from 1.0.1 is unchanged and verified.
+
 ## 1.0.2
 
 ### Crash fix
