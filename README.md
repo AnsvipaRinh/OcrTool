@@ -44,9 +44,12 @@ OcrTool.App.exe --autostart status  # print "AUTOSTART on/off"
 OcrTool.App.exe --autostart off     # disable
 ```
 
-The entry is stored as `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
-with the current exe path. It needs no administrator rights and shows up in
-Task Manager → Startup apps, so you can disable it there as well.
+The app registers two per-user startup paths: the standard Windows Run key and
+a shortcut in the user's Startup folder. The shortcut stores the executable's
+working directory explicitly and acts as a fallback if the Run entry is lost.
+Both are created without administrator rights. Use the tray menu to disable
+autostart; disabling only one of the two entries in Task Manager may leave the
+other fallback active.
 
 ### Headless CLI
 
