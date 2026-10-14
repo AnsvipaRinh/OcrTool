@@ -31,6 +31,14 @@ internal static class Program
             return;
         }
 
+        // Run-key and Startup-folder fallback may both fire. Keep only one tray process.
+        using var singleInstance = new Mutex(true, @"Local\\OcrTool.App.Singleton", out var createdNew);
+        if (!createdNew)
+        {
+            Logger.Log("Duplicate startup launch detected; existing instance is already running.");
+            return;
+        }
+
         Logger.Log("Application startup");
 
         ApplicationConfiguration.Initialize();
