@@ -1,0 +1,60 @@
+name: Release on version bump
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'OcrTool.App/OcrTool.App.csproj'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Read release version
+        id: meta
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content OcrTool.App/OcrTool.App.csproj
+          $version = $project.Project.PropertyGroup | ForEach-Object { $_.Version } | Where-Object { $_ } | Select-Object -First 1
+          if (-not $version) { throw "Version was not found in OcrTool.App.csproj" }
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+          "zip=OcrTool-v$version-win-x64.zip" >> $env:GITHUB_OUTPUT
+
+      - name: Fetch tessdata models
+        shell: bash
+        run: bash scripts/fetch_tessdata.sh
+
+      - name: Publish
+        run: >-
+          dotnet publish OcrTool.App/OcrTool.App.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=false -p:PublishTrimmed=false
+          -o publish
+
+      - name: Smoke test
+        run: ./publish/OcrTool.App.exe --autostart status
+
+      - name: Package
+        shell: pwsh
+        run: |
+          Compress-Archive -Path publish\* -DestinationPath "${{ steps.meta.outputs.zip }}" -Force
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "${{ steps.meta.outputs.tag }}"
+          "${{ steps.meta.outputs.zip }}"
+          --target "${{ github.sha }}"
+          --title "${{ steps.meta.outputs.tag }}"
+          --generate-notes
