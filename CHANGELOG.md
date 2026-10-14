@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.4
+
+### Windows autostart reliability
+- Keep the standard per-user Run registration and add a Startup-folder shortcut as an independent fallback.
+- Set the shortcut working directory explicitly so startup does not depend on the current directory chosen by Windows.
+- Validate that the Run entry points to an existing executable instead of treating any non-empty registry value as enabled.
+- Prevent duplicate tray processes when both startup mechanisms are invoked.
+
+
 ## 1.0.3
 
 ### Hotkey window class fix
