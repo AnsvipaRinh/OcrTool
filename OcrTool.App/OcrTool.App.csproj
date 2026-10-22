@@ -14,7 +14,7 @@
     <TrimMode>none</TrimMode>
     <ApplicationHighDpiMode>SystemAware</ApplicationHighDpiMode>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    <Version>1.0.4</Version>
+    <Version>1.0.5</Version>
     <Product>OCR Tool</Product>
     <Description>Windows tray OCR tool: hotkey region capture to clipboard, English + Russian.</Description>
   </PropertyGroup>
