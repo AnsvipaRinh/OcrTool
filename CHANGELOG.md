@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.5
+
+### High-DPI tray icon refresh
+- Select the tray icon raster size using the Windows taskbar's current DPI rather than the process-wide small-icon metric.
+- Refresh the icon after display topology, device-node, or display-setting notifications.
+- Keep the application in SystemAware mode; no global DPI-awareness change is made to the capture overlay or other UI.
+
+
 ## 1.0.4
 
 ### Windows autostart reliability
