@@ -213,6 +213,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly string _configPath;
     private AppConfig _config;
     private SelectionOverlay? _overlay;
+    private readonly TrayDisplayWatcher _displayWatcher;
 
     public TrayApplicationContext()
     {
@@ -233,6 +234,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             ContextMenuStrip = _trayMenu
         };
         _trayIcon.MouseClick += OnTrayIconMouseClick;
+        _displayWatcher = new TrayDisplayWatcher(RefreshTrayIcon);
 
         Logger.Log($"Tray icon initialized, hotkey: {_config.Hotkey}, registered: {_hotkey.IsRegistered}");
 
@@ -329,16 +331,28 @@ internal sealed class TrayApplicationContext : ApplicationContext
         using var stream = asm.GetManifestResourceStream("OcrTool.App.tray.ico");
         if (stream != null)
         {
-            var size = NativeMethods.GetSystemMetrics(NativeMethods.SM_CXSMICON);
-            if (size <= 0 || size > 256)
-            {
-                size = 16;
-            }
+            var dpi = NativeMethods.GetTrayDpi();
+            var size = NativeMethods.GetSystemMetricsForDpi(NativeMethods.SM_CXSMICON, dpi);
+            if (size <= 0 || size > 256) size = NativeMethods.GetSystemMetrics(NativeMethods.SM_CXSMICON);
+            if (size <= 0 || size > 256) size = 16;
             return new Icon(stream, size, size);
         }
 
         Logger.Log("tray.ico resource missing, using fallback");
         return CreateFrameIcon(16);
+    }
+
+    private void RefreshTrayIcon()
+    {
+        try
+        {
+            var replacement = CreateTrayIcon();
+            var previous = _trayIcon.Icon;
+            _trayIcon.Icon = replacement;
+            previous?.Dispose();
+            Logger.Log("Tray icon refreshed for taskbar DPI " + NativeMethods.GetTrayDpi());
+        }
+        catch (Exception ex) { Logger.Log("Tray icon refresh failed: " + ex); }
     }
 
     private Icon CreateFrameIcon(int size)
@@ -599,6 +613,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void Exit()
     {
+        _displayWatcher?.Dispose();
         _hotkey?.Dispose();
         if (_trayIcon != null)
         {
@@ -613,6 +628,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         if (disposing)
         {
+            _displayWatcher?.Dispose();
             _hotkey?.Dispose();
             _trayIcon?.Dispose();
             _overlay?.Dispose();
@@ -629,9 +645,39 @@ internal sealed class AppConfig
 internal static class NativeMethods
 {
     public const int SM_CXSMICON = 49;
+    [DllImport("user32.dll")] public static extern int GetSystemMetrics(int nIndex);
+    [DllImport("user32.dll", EntryPoint = "GetSystemMetricsForDpi")] private static extern int GetSystemMetricsForDpiNative(int index, uint dpi);
+    [DllImport("user32.dll", EntryPoint = "FindWindowW", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindow(string? className, string? windowName);
+    [DllImport("user32.dll", EntryPoint = "GetDpiForWindow")] private static extern uint GetDpiForWindowNative(IntPtr hwnd);
+    [DllImport("user32.dll", EntryPoint = "GetDpiForSystem")] private static extern uint GetDpiForSystemNative();
+    public static uint GetTrayDpi()
+    {
+        try { var hwnd = FindWindow("Shell_TrayWnd", null); if (hwnd != IntPtr.Zero) { var dpi = GetDpiForWindowNative(hwnd); if (dpi >= 48 && dpi <= 768) return dpi; } var systemDpi = GetDpiForSystemNative(); return systemDpi >= 48 && systemDpi <= 768 ? systemDpi : 96; }
+        catch (EntryPointNotFoundException) { return 96; }
+    }
+    public static int GetSystemMetricsForDpi(int index, uint dpi)
+    {
+        try { return GetSystemMetricsForDpiNative(index, dpi); }
+        catch (EntryPointNotFoundException) { return GetSystemMetrics(index); }
+    }
+}
 
-    [DllImport("user32.dll")]
-    public static extern int GetSystemMetrics(int nIndex);
+internal sealed class TrayDisplayWatcher : NativeWindow, IDisposable
+{
+    private const int WM_DISPLAYCHANGE = 0x007E, WM_SETTINGCHANGE = 0x001A, WM_DEVICECHANGE = 0x0219;
+    private readonly Action _refresh;
+    private bool _disposed;
+    public TrayDisplayWatcher(Action refresh)
+    {
+        _refresh = refresh;
+        CreateHandle(new CreateParams { Caption = "OcrTool.TrayDisplayWatcher", Width = 0, Height = 0 });
+    }
+    protected override void WndProc(ref Message message)
+    {
+        base.WndProc(ref message);
+        if (message.Msg == WM_DISPLAYCHANGE || message.Msg == WM_SETTINGCHANGE || (message.Msg == WM_DEVICECHANGE && message.WParam.ToInt32() == 0x0007)) _refresh();
+    }
+    public void Dispose() { if (_disposed) return; _disposed = true; if (Handle != IntPtr.Zero) DestroyHandle(); }
 }
 
 /// <summary>
